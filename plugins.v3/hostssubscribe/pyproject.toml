@@ -1,0 +1,7 @@
+[project]
+name = "moviepilot-plugin-hostssubscribe"
+dynamic = ["version"]
+requires-python = ">=3.12"
+dependencies = [
+    "python-hosts>=1.1.2",
+]

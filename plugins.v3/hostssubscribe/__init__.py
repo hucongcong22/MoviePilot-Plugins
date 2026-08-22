@@ -8,6 +8,7 @@ import requests
 from apscheduler.triggers.cron import CronTrigger
 from python_hosts import Hosts, HostsEntry
 
+from app import schemas
 from app.plugins import _PluginBase
 from app.schemas.types import EventType
 from app.sdk.events import Event, eventmanager
@@ -24,11 +25,11 @@ class HostsSubscribe(_PluginBase):
     # 插件图标
     plugin_icon = "hosts.png"
     # 插件版本
-    plugin_version = "1.0.0"
+    plugin_version = "1.1.0"
     # 插件作者
-    plugin_author = "thsrite"
+    plugin_author = "hucongcong22"
     # 作者主页
-    author_url = "https://github.com/thsrite"
+    author_url = "https://github.com/hucongcong22"
     # 插件配置项ID前缀
     plugin_config_prefix = "hostssubscribe_"
     # 加载顺序
@@ -83,11 +84,48 @@ class HostsSubscribe(_PluginBase):
         self.update_hosts()
 
     def get_api(self) -> list[dict[str, Any]]:
-        """当前插件不注册后端 API。"""
-        return []
+        """注册立即拉取订阅内容接口。"""
+        return [
+            {
+                "path": "/fetch",
+                "endpoint": self.api_fetch,
+                "methods": ["GET"],
+                "auth": "bear",
+                "summary": "立即拉取订阅Hosts",
+                "description": "拉取所有订阅地址内容并返回预览文本，不写入系统hosts",
+                "response_model": schemas.Response[str],
+            }
+        ]
+
+    def api_fetch(self) -> schemas.Response[str]:
+        """立即拉取所有订阅地址内容，返回合并后的预览文本。"""
+        if not self._subscribe_urls:
+            return schemas.Response(success=False, message="未配置订阅地址")
+        lines: list[str] = []
+        errors: list[str] = []
+        for url in self._subscribe_urls:
+            lines.append(f"# === {url} ===")
+            try:
+                lines.extend(self._fetch_url(url))
+            except Exception as err:
+                errors.append(f"{url}: {str(err)}")
+                logger.error(f"[HostsSubscribe] 订阅地址获取失败：{url}：{err}")
+        result = "\n".join(lines)
+        if errors:
+            result = f"{result}\n\n# 拉取错误：\n" + "\n".join(errors)
+        return schemas.Response(success=True, data=result)
 
     def get_form(self) -> tuple[list[dict], dict[str, Any]]:
         """返回配置页面和默认配置模型。"""
+        cron_items = [
+            {"title": "每小时", "value": "0 * * * *"},
+            {"title": "每2小时", "value": "0 */2 * * *"},
+            {"title": "每6小时", "value": "0 */6 * * *"},
+            {"title": "每12小时", "value": "0 */12 * * *"},
+            {"title": "每天（凌晨3点）", "value": "0 3 * * *"},
+            {"title": "每周（周一凌晨3点）", "value": "0 3 * * 1"},
+            {"title": "每月（1号凌晨3点）", "value": "0 3 1 * *"},
+        ]
         return [
             {
                 "component": "VForm",
@@ -138,11 +176,47 @@ class HostsSubscribe(_PluginBase):
                                 "props": {"cols": 12, "md": 6},
                                 "content": [
                                     {
-                                        "component": "VTextField",
+                                        "component": "VSelect",
                                         "props": {
                                             "model": "update_cron",
-                                            "label": "更新周期（cron表达式）",
-                                            "placeholder": "0 3 * * *",
+                                            "label": "更新周期",
+                                            "items": cron_items,
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 6, "class": "d-flex align-center"},
+                                "content": [
+                                    {
+                                        "component": "VBtn",
+                                        "props": {
+                                            "color": "primary",
+                                            "variant": "tonal",
+                                            "onClick": "async () => { const res = await window.MoviePilotAPI.get('plugin/HostsSubscribe/fetch'); if (res && res.success) { model.fetch_result = res.data } }",
+                                        },
+                                        "text": "立即拉取",
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "fetch_result",
+                                            "readonly": True,
+                                            "label": "拉取内容预览",
+                                            "rows": 8,
+                                            "placeholder": "点击「立即拉取」后，订阅地址内容会显示在这里",
                                         },
                                     }
                                 ],
@@ -204,7 +278,7 @@ class HostsSubscribe(_PluginBase):
                                             "variant": "tonal",
                                             "text": "host格式为：ip host，中间有空格。"
                                                     "（注：容器运行则更新容器hosts，非宿主机！）"
-                                                    "启用后立即更新一次，之后按配置的cron周期定时更新。",
+                                                    "启用后立即更新一次，之后按配置的周期定时更新。",
                                         },
                                     }
                                 ],
@@ -217,6 +291,7 @@ class HostsSubscribe(_PluginBase):
             "enabled": False,
             "subscribe_urls": "",
             "update_cron": "0 3 * * *",
+            "fetch_result": "",
             "manual_hosts": "",
             "err_hosts": "",
         }

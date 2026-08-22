@@ -28,6 +28,78 @@ def test_split_lines_empty() -> None:
     assert HostsSubscribe._split_lines("  \n ") == []
 
 
+def test_form_has_cron_select_options() -> None:
+    """配置表单必须提供可选择的更新周期，而不是自由输入。"""
+    form, _model = HostsSubscribe.get_form()
+    raw = str(form)
+    assert "VSelect" in raw
+    assert '"model": "update_cron"' in raw
+    assert '"0 * * * *"' in raw
+    assert '"0 3 * * *"' in raw
+    assert "VTextField" not in raw
+
+
+def test_form_has_fetch_button_and_preview() -> None:
+    """配置表单必须提供立即拉取按钮与拉取内容预览控件。"""
+    form, model = HostsSubscribe.get_form()
+    raw = str(form)
+    assert "VBtn" in raw
+    assert "立即拉取" in raw
+    assert "fetch_result" in raw
+    assert "拉取内容预览" in raw
+    assert model.get("fetch_result") == ""
+
+
+def _make_plugin(subscribe_urls: list[str] | None = None) -> HostsSubscribe:
+    """构造不启动服务的插件实例，避免真实网络与系统hosts写入。"""
+    plugin = object.__new__(HostsSubscribe)
+    plugin._enabled = True
+    plugin._subscribe_urls = subscribe_urls or []
+    plugin._manual_hosts = []
+    return plugin
+
+
+def test_api_fetch_returns_merged_content(monkeypatch) -> None:
+    """立即拉取接口返回所有订阅地址合并内容。"""
+    plugin = _make_plugin(subscribe_urls=["https://a.example/hosts", "https://b.example/hosts"])
+    monkeypatch.setattr(
+        HostsSubscribe,
+        "_fetch_url",
+        staticmethod(lambda url: [f"1.2.3.4 {url}", "5.6.7.8 example.org"]),
+    )
+
+    response = plugin.api_fetch()
+
+    assert response.success is True
+    assert "https://a.example/hosts" in response.data
+    assert "https://b.example/hosts" in response.data
+    assert "1.2.3.4" in response.data
+    assert "5.6.7.8 example.org" in response.data
+
+
+def test_api_fetch_reports_errors(monkeypatch) -> None:
+    """订阅地址全部拉取失败时，接口返回错误提示。"""
+    plugin = _make_plugin(subscribe_urls=["https://a.example/hosts"])
+    monkeypatch.setattr(
+        HostsSubscribe,
+        "_fetch_url",
+        staticmethod(lambda url: (_ for _ in ()).throw(RuntimeError("network down"))),
+    )
+
+    response = plugin.api_fetch()
+
+    assert response.success is True
+    assert "拉取错误" in response.data
+    assert "network down" in response.data
+
+
+def test_api_fetch_without_urls() -> None:
+    """未配置订阅地址时返回失败提示。"""
+    plugin = _make_plugin(subscribe_urls=[])
+    response = plugin.api_fetch()
+    assert response.success is False
+
+
 def test_parse_hosts_lines_ipv4() -> None:
     """合法的 IPv4 hosts 行解析为 ipv4 条目。"""
     errors: list[str] = []

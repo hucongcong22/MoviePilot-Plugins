@@ -3,12 +3,13 @@
     "name": "定时订阅Hosts",
     "description": "订阅远程hosts规则，定时更新系统hosts文件，加速网络访问。",
     "labels": "网络",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "icon": "hosts.png",
-    "author": "thsrite",
+    "author": "hucongcong22",
     "level": 1,
     "system_version": ">=3.0.0",
     "history": {
+      "v1.1.0": "更新周期改为下拉选择；新增立即拉取订阅内容按钮与内容预览。",
       "v1.0.0": "首次发布：支持订阅远程hosts规则并定时更新系统hosts文件。"
     }
   }

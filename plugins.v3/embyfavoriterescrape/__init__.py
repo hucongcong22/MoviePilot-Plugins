@@ -63,6 +63,8 @@ class EmbyFavoriteRescrape(_PluginBase):
     _scrape_types = "MOV,TV"
     # 是否覆盖已有元数据
     _overwrite = True
+    # 是否启用路径映射（依据重命名格式计算媒体目录，参考LibraryScraper）
+    _enable_path_mapping = True
     # 刮削成功后是否发送通知
     _notify = False
 
@@ -78,6 +80,7 @@ class EmbyFavoriteRescrape(_PluginBase):
         self._exclude_keywords = config.get("exclude_keywords") or ""
         self._scrape_types = str(config.get("scrape_types") or "MOV,TV").strip() or "MOV,TV"
         self._overwrite = bool(config.get("overwrite", True))
+        self._enable_path_mapping = bool(config.get("enable_path_mapping", True))
         self._notify = bool(config.get("notify"))
 
     def get_state(self) -> bool:
@@ -320,6 +323,9 @@ class EmbyFavoriteRescrape(_PluginBase):
         # 媒体服务器返回目录（无视频扩展名）时，直接按目录刮削。
         if not self._is_media_file(item_path):
             return item_path, "dir"
+        # 未启用路径映射时，直接使用 webhook 返回的媒体路径（单文件刮削）。
+        if not self._enable_path_mapping:
+            return item_path, "file"
         rename_format_level = self._rename_format_level(mtype)
         if rename_format_level >= 1:
             parents = Path(item_path).parents
@@ -475,6 +481,24 @@ class EmbyFavoriteRescrape(_PluginBase):
                                 "props": {"cols": 12},
                                 "content": [
                                     {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "enable_path_mapping",
+                                            "label": "启用路径映射",
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
                                         "component": "VAlert",
                                         "props": {
                                             "type": "info",
@@ -483,6 +507,16 @@ class EmbyFavoriteRescrape(_PluginBase):
                                                     "且事件命中上方“触发事件”或 SaveReason=ToggleFavorite 时，自动重新刮削该媒体。"
                                                     "需要在媒体服务器中开启对应 Webhook；若 Emby 的收藏事件名与本机不一致，"
                                                     "请按收到的 Event 字段调整“触发事件”。",
+                                        },
+                                    },
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "warning",
+                                            "variant": "tonal",
+                                            "text": "路径映射：开启时按 MoviePilot 设置的电影/电视剧重命名格式计算真正需刮削的媒体目录"
+                                                    "（参考 LibraryScraper）；关闭时直接使用媒体服务器返回的原始路径（按单文件刮削）。"
+                                                    "若你的媒体库目录结构与重命名格式不一致，请关闭本开关。",
                                         },
                                     }
                                 ],
@@ -494,6 +528,7 @@ class EmbyFavoriteRescrape(_PluginBase):
         ], {
             "enabled": False,
             "overwrite": True,
+            "enable_path_mapping": True,
             "channels": "emby",
             "trigger_events": self._trigger_events,
             "user_names": "",
@@ -511,7 +546,8 @@ class EmbyFavoriteRescrape(_PluginBase):
                     "type": "info",
                     "variant": "tonal",
                     "text": f"插件状态：{'已启用' if self._enabled else '未启用'}；"
-                            f"监听渠道：{self._channels}；触发事件：{self._trigger_events}",
+                            f"监听渠道：{self._channels}；触发事件：{self._trigger_events}；"
+                            f"路径映射：{'启用' if self._enable_path_mapping else '关闭'}。",
                 },
             }
         ]

@@ -24,8 +24,9 @@ def _make_plugin(**overrides) -> EmbyFavoriteRescrape:
     plugin._user_names = ""
     plugin._exclude_keywords = ""
     plugin._scrape_types = "MOV,TV"
+    plugin._enable_path_mapping = True
     for key, value in overrides.items():
-        setattr(plugin, key, value)
+        setattr(plugin, f"_{key}", value)
     return plugin
 
 
@@ -301,3 +302,23 @@ def test_resolve_scrape_target_dir_input(monkeypatch) -> None:
     target, target_type = plugin._resolve_scrape_target(r"/tv/国产剧/长风渡 (2023)", MediaType.TV)
     assert target_type == "dir"
     assert target == r"/tv/国产剧/长风渡 (2023)"
+
+
+def test_resolve_scrape_target_mapping_disabled(monkeypatch) -> None:
+    """关闭路径映射时直接使用 webhook 原始媒体路径（单文件刮削）。"""
+    monkeypatch.setattr(settings, "MOVIE_RENAME_FORMAT", "{{title}}/{{title}} ({{year}})")
+    plugin = _make_plugin(enable_path_mapping=False)
+    target, target_type = plugin._resolve_scrape_target(
+        r"/movies/动画电影/蜘蛛侠 (2023)/蜘蛛侠 (2023).mkv", MediaType.MOVIE
+    )
+    assert target_type == "file"
+    assert target.endswith(".mkv")
+
+
+def test_get_form_includes_path_mapping() -> None:
+    """配置表单必须提供路径映射开关。"""
+    form, model = _make_plugin().get_form()
+    raw = str(form)
+    assert "enable_path_mapping" in raw
+    assert "启用路径映射" in raw
+    assert model.get("enable_path_mapping") is True

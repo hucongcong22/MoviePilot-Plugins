@@ -12,5 +12,18 @@
       "v1.1.0": "更新周期改为下拉选择；新增立即拉取订阅内容按钮与内容预览。",
       "v1.0.0": "首次发布：支持订阅远程hosts规则并定时更新系统hosts文件。"
     }
+  },
+  "EmbyFavoriteRescrape": {
+    "name": "Emby移除收藏自动刮削",
+    "description": "在Emby中点击移除收藏时，自动重新刮削该视频的元数据和图片。",
+    "labels": "媒体库",
+    "version": "2.0.0",
+    "icon": "scraper.png",
+    "author": "sifangyu",
+    "level": 1,
+    "system_version": ">=3.0.0",
+    "history": {
+      "v2.0.0": "V3版本首次发布：使用app.sdk与ScrapingChain新合同，移除收藏时自动重新刮削。"
+    }
   }
 }

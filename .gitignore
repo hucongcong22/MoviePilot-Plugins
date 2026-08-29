@@ -166,3 +166,7 @@ cython_debug/
 node_modules/
 yarn.lock
 .DS_Store
+/plugins.v2/LibraryScraper/__init__.py
+/plugins.v2/doubanwatching/__init__.py
+/icons/douban.png
+/plugins.v2/doubanwatching/DoubanHelper.py

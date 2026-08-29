@@ -16,12 +16,13 @@
     "name": "Emby移除收藏自动刮削",
     "description": "在Emby中点击移除收藏时，自动重新刮削该视频的元数据和图片。",
     "labels": "媒体库",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "icon": "scraper.png",
     "author": "sifangyu",
     "level": 1,
     "v3": false,
     "history": {
+	  "v1.2.0": "修改作者的信息",
       "v1.1.0": "设置页新增路径映射开关；关闭时直接使用媒体服务器返回路径(单文件刮削)。",
       "v1.0.0": "首次发布：监听媒体服务器Webhook，移除收藏时自动重新刮削该媒体。"
     }

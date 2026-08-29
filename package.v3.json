@@ -17,14 +17,15 @@
     "name": "Emby移除收藏自动刮削",
     "description": "在Emby中点击移除收藏时，自动重新刮削该视频的元数据和图片。",
     "labels": "媒体库",
-    "version": "2.1.0",
+    "version": "1.2.0",
     "icon": "scraper.png",
-    "author": "sifangyu",
+    "author": "hucongcong22",
     "level": 1,
     "system_version": ">=3.0.0",
     "history": {
-      "v2.1.0": "设置页新增路径映射开关；关闭时直接使用媒体服务器返回路径(单文件刮削)。",
-      "v2.0.0": "V3版本首次发布：使用app.sdk与ScrapingChain新合同，移除收藏时自动重新刮削。"
+      "v1.2.0": "更新做作者的信息",
+      "v1.1.0": "设置页新增路径映射开关；关闭时直接使用媒体服务器返回路径(单文件刮削)。",
+      "v1.0.0": "V3版本首次发布：使用app.sdk与ScrapingChain新合同，移除收藏时自动重新刮削。"
     }
   }
 }

@@ -24,7 +24,7 @@ def _make_plugin(**overrides) -> EmbyFavoriteRescrape:
     plugin._user_names = ""
     plugin._exclude_keywords = ""
     plugin._scrape_types = "MOV,TV"
-    plugin._enable_path_mapping = True
+    plugin._path_mapping = ""
     for key, value in overrides.items():
         setattr(plugin, f"_{key}", value)
     return plugin
@@ -304,21 +304,41 @@ def test_resolve_scrape_target_dir_input(monkeypatch) -> None:
     assert target == r"/tv/国产剧/长风渡 (2023)"
 
 
-def test_resolve_scrape_target_mapping_disabled(monkeypatch) -> None:
-    """关闭路径映射时直接使用 webhook 原始媒体路径（单文件刮削）。"""
+def test_map_path() -> None:
+    """路径映射按最长源前缀做前缀替换。"""
+    plugin = _make_plugin(path_mapping="/data/video:/mnt/media/video\n/media:/mnt")
+    assert plugin._map_path("/data/video/movie/a.mkv") == "/mnt/media/video/movie/a.mkv"
+    assert plugin._map_path("/media/tv/x.mp4") == "/mnt/tv/x.mp4"
+    assert plugin._map_path("/other/x.mkv") == "/other/x.mkv"
+
+
+def test_map_path_empty() -> None:
+    """未配置路径映射时返回原始路径。"""
+    plugin = _make_plugin()
+    assert plugin._map_path("/data/video/movie/a.mkv") == "/data/video/movie/a.mkv"
+
+
+def test_map_path_skip_blank_and_comment() -> None:
+    """空行与 # 注释行被忽略。"""
+    plugin = _make_plugin(path_mapping="# 注释\n\n/data/video:/mnt/media/video")
+    assert plugin._map_path("/data/video/movie/a.mkv") == "/mnt/media/video/movie/a.mkv"
+
+
+def test_resolve_scrape_target_applies_path_mapping(monkeypatch) -> None:
+    """先把 webhook 路径替换为本地路径，再按重命名格式取媒体目录。"""
     monkeypatch.setattr(settings, "MOVIE_RENAME_FORMAT", "{{title}}/{{title}} ({{year}})")
-    plugin = _make_plugin(enable_path_mapping=False)
+    plugin = _make_plugin(path_mapping="/data/video:/mnt/media/video")
     target, target_type = plugin._resolve_scrape_target(
-        r"/movies/动画电影/蜘蛛侠 (2023)/蜘蛛侠 (2023).mkv", MediaType.MOVIE
+        r"/data/video/动画电影/蜘蛛侠 (2023)/蜘蛛侠 (2023).mkv", MediaType.MOVIE
     )
-    assert target_type == "file"
-    assert target.endswith(".mkv")
+    assert target_type == "dir"
+    assert target == r"/mnt/media/video/动画电影/蜘蛛侠 (2023)"
 
 
 def test_get_form_includes_path_mapping() -> None:
-    """配置表单必须提供路径映射开关。"""
+    """配置表单必须提供路径映射输入框。"""
     form, model = _make_plugin().get_form()
     raw = str(form)
-    assert "enable_path_mapping" in raw
-    assert "启用路径映射" in raw
-    assert model.get("enable_path_mapping") is True
+    assert "path_mapping" in raw
+    assert "路径映射" in raw
+    assert model.get("path_mapping") == ""

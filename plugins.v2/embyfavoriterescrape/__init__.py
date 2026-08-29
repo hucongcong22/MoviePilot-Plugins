@@ -38,7 +38,7 @@ class EmbyFavoriteRescrape(_PluginBase):
     # 插件图标
     plugin_icon = "scraper.png"
     # 插件版本
-    plugin_version = "1.2.0"
+    plugin_version = "1.3.0"
     # 插件作者
     plugin_author = "hucongcong22"
     # 作者主页
@@ -64,8 +64,8 @@ class EmbyFavoriteRescrape(_PluginBase):
     _scrape_types = "MOV,TV"
     # 是否覆盖已有元数据
     _overwrite = True
-    # 是否启用路径映射（依据重命名格式计算媒体目录，参考LibraryScraper）
-    _enable_path_mapping = True
+    # 路径映射：媒体服务器返回路径 -> MoviePilot 本地路径，每行一条（source:target）
+    _path_mapping = ""
     # 刮削成功后是否发送通知
     _notify = False
 
@@ -81,7 +81,7 @@ class EmbyFavoriteRescrape(_PluginBase):
         self._exclude_keywords = config.get("exclude_keywords") or ""
         self._scrape_types = str(config.get("scrape_types") or "MOV,TV").strip() or "MOV,TV"
         self._overwrite = bool(config.get("overwrite", True))
-        self._enable_path_mapping = bool(config.get("enable_path_mapping", True))
+        self._path_mapping = config.get("path_mapping") or ""
         self._notify = bool(config.get("notify"))
 
     def get_state(self) -> bool:
@@ -309,16 +309,16 @@ class EmbyFavoriteRescrape(_PluginBase):
     def _resolve_scrape_target(self, item_path: str, mtype: MediaType) -> Tuple[str, str]:
         """把 webhook 路径映射为真正需要刮削的媒体目录或文件。
 
-        参考 LibraryScraper 的 ``__get_scrape_item``：根据电影/电视剧的重命名格式，
-        从文件往上取对应目录层级作为媒体目录；扁平或无目录层级时退回单文件刮削。
+        1. 先按配置的“路径映射”把媒体服务器返回的路径替换为 MoviePilot 本地路径
+           （例如 ``/data/video -> /mnt/media/video``）。
+        2. 参考 LibraryScraper 的 ``__get_scrape_item``：根据电影/电视剧的重命名格式，
+           从文件往上取对应目录层级作为媒体目录；扁平或无目录层级时退回单文件刮削。
         返回值: (刮削路径, 目标类型)，目标类型为 ``dir`` 或 ``file``。
         """
+        item_path = self._map_path(item_path)
         # 媒体服务器返回目录（无视频扩展名）时，直接按目录刮削。
         if not self._is_media_file(item_path):
             return item_path, "dir"
-        # 未启用路径映射时，直接使用 webhook 返回的媒体路径（单文件刮削）。
-        if not self._enable_path_mapping:
-            return item_path, "file"
         rename_format_level = self._rename_format_level(mtype)
         if rename_format_level >= 1:
             parents = Path(item_path).parents
@@ -327,6 +327,43 @@ class EmbyFavoriteRescrape(_PluginBase):
                 return str(parents[rename_format_level - 1]), "dir"
         # 扁平或自定义重命名格式无目录层级时，退回到单文件刮削。
         return item_path, "file"
+
+    def _map_path(self, path: str) -> str:
+        """按配置的路径映射把媒体服务器路径替换为 MoviePilot 本地路径。
+
+        规则格式：每行一条 ``源前缀:目标前缀``（也可用 ``=>`` 分隔），命中时做前缀替换；
+        命中最长源前缀的规则优先，避免 ``/media`` 误匹配 ``/media2``。无命中返回原路径。
+        """
+        if not self._path_mapping:
+            return path
+        rules = []
+        for raw in self._path_mapping.splitlines():
+            rule = raw.strip()
+            if not rule or rule.startswith("#"):
+                continue
+            source, target = self._split_mapping_rule(rule)
+            if source and target:
+                rules.append((source.rstrip("/"), target.rstrip("/")))
+        if not rules:
+            return path
+        for source, target in sorted(rules, key=lambda r: len(r[0]), reverse=True):
+            if path == source:
+                return target
+            if path.startswith(source + "/"):
+                return target + path[len(source):]
+        return path
+
+    @staticmethod
+    def _split_mapping_rule(rule: str) -> Tuple[str, str]:
+        """拆分一条映射规则为 (源前缀, 目标前缀)。支持 ``source:target`` 或 ``source => target``。"""
+        for sep in ("=>", ":"):
+            if sep in rule:
+                source, target = rule.split(sep, 1)
+                source = source.strip()
+                target = target.strip()
+                if source and target:
+                    return source, target
+        return "", ""
 
     @staticmethod
     def _modify_time(path: str) -> Optional[float]:
@@ -482,10 +519,12 @@ class EmbyFavoriteRescrape(_PluginBase):
                                 "props": {"cols": 12},
                                 "content": [
                                     {
-                                        "component": "VSwitch",
+                                        "component": "VTextarea",
                                         "props": {
-                                            "model": "enable_path_mapping",
-                                            "label": "启用路径映射",
+                                            "model": "path_mapping",
+                                            "label": "路径映射",
+                                            "rows": 4,
+                                            "placeholder": "每行一条，格式：媒体服务器路径:MoviePilot本地路径，例如：\n/data/video:/mnt/media/video",
                                         },
                                     }
                                 ],
@@ -515,9 +554,9 @@ class EmbyFavoriteRescrape(_PluginBase):
                                         "props": {
                                             "type": "warning",
                                             "variant": "tonal",
-                                            "text": "路径映射：开启时按 MoviePilot 设置的电影/电视剧重命名格式计算真正需刮削的媒体目录"
-                                                    "（参考 LibraryScraper）；关闭时直接使用媒体服务器返回的原始路径（按单文件刮削）。"
-                                                    "若你的媒体库目录结构与重命名格式不一致，请关闭本开关。",
+                                            "text": "路径映射：当媒体服务器（如 Emby）与 MoviePilot 挂载的目录路径不一致时，"
+                                                    "按“源前缀:目标前缀”把 Webhook 返回的路径替换为 MoviePilot 本地路径后再刮削；"
+                                                    "留空则直接使用原始路径。刮削目录仍会按 MoviePilot 设定的电影/电视剧重命名格式计算。",
                                         },
                                     }
                                 ],
@@ -529,7 +568,7 @@ class EmbyFavoriteRescrape(_PluginBase):
         ], {
             "enabled": False,
             "overwrite": True,
-            "enable_path_mapping": True,
+            "path_mapping": "",
             "channels": "emby",
             "trigger_events": self._trigger_events,
             "user_names": "",
@@ -548,7 +587,7 @@ class EmbyFavoriteRescrape(_PluginBase):
                     "variant": "tonal",
                     "text": f"插件状态：{'已启用' if self._enabled else '未启用'}；"
                             f"监听渠道：{self._channels}；触发事件：{self._trigger_events}；"
-                            f"路径映射：{'启用' if self._enable_path_mapping else '关闭'}。",
+                            f"路径映射：{'已配置' if self._path_mapping else '未配置'}。",
                 },
             }
         ]

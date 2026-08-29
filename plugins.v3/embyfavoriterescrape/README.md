@@ -17,10 +17,10 @@
    判定为一次移除收藏。
 4. 后台线程按媒体身份（`media_source` + `media_id`）重新识别媒体，并调用
    `ScrapingChain.scrape_metadata` 重新刮削该媒体的 NFO 与图片。
-5. **刮削路径映射**：与 `LibraryScraper` 一致，根据 `MOVIE_RENAME_FORMAT` /
-   `TV_RENAME_FORMAT` 的目录层级，把 webhook 返回的媒体路径映射为真正的媒体目录
-   （扁平结构或无目录层级时退回单文件），再交给刮削链处理，避免把分类目录或
-   单一文件当成媒体整体。
+5. **刮削路径映射**：先按配置的“路径映射”（媒体服务器路径 → MoviePilot 本地路径）
+   替换 webhook 返回的媒体路径；再与 `LibraryScraper` 一致，根据 `MOVIE_RENAME_FORMAT` /
+   `TV_RENAME_FORMAT` 的目录层级，把路径映射为真正的媒体目录（扁平结构或无目录层级时
+   退回单文件），最后交给刮削链处理，避免把分类目录或单一文件当成媒体整体。
 
 ## 配置说明
 
@@ -32,9 +32,10 @@
   请按实际收到的 `Event` 字段调整。
 - **限定用户名**：只处理指定媒体库用户，留空不限制。
 - **排除路径关键词**：命中这些关键词的路径不刮削。
-- **启用路径映射**：开启时按 MoviePilot 设置的重命名格式（`MOVIE_RENAME_FORMAT` /
-  `TV_RENAME_FORMAT`）把 webhook 路径映射为真正需刮削的媒体目录（参考
-  LibraryScraper）；关闭时直接使用媒体服务器返回的原始路径（按单文件刮削）。
+- **路径映射**：当媒体服务器（如 Emby/Jellyfin）与 MoviePilot 挂载的目录路径不一致时，
+  按“每行一条 `媒体服务器路径:MoviePilot本地路径`”把 webhook 返回的路径替换为本地路径
+  后再刮削；留空则直接使用原始路径。刮削目录仍会按 MoviePilot 设置的重命名格式
+  （`MOVIE_RENAME_FORMAT` / `TV_RENAME_FORMAT`）计算（参考 LibraryScraper）。
 - **发送通知**：刮削成功 / 失败后发送通知。
 
 ## 提示

@@ -19,7 +19,7 @@ def _make_plugin(**overrides) -> EmbyFavoriteRescrape:
     plugin._enabled = True
     plugin._channels = "emby"
     plugin._trigger_events = (
-        "UserDataSaved,userdata.saved,item.favorite,itemFavorite,ItemFavorite,favorite"
+        "UserDataSaved,userdata.saved,item.favorite,itemFavorite,ItemFavorite,favorite,item.rate"
     )
     plugin._user_names = ""
     plugin._exclude_keywords = ""
@@ -48,6 +48,7 @@ def test_is_media_file() -> None:
     assert EmbyFavoriteRescrape._is_media_file(r"/data/movies/A (2020)/A (2020).mkv") is True
     assert EmbyFavoriteRescrape._is_media_file(r"/data/movies/A (2020)/A.mp4") is True
     assert EmbyFavoriteRescrape._is_media_file(r"/data/movies/A (2020)/A.BluRay.REMUX.iso") is True
+    assert EmbyFavoriteRescrape._is_media_file(r"/data/movies/A (2020)/A - 2160p.strm") is True
     assert EmbyFavoriteRescrape._is_media_file(r"/data/movies/A (2020)") is False
     assert EmbyFavoriteRescrape._is_media_file("/data/some/path/without/extension") is False
     assert EmbyFavoriteRescrape._is_media_file("") is False
@@ -170,6 +171,22 @@ def test_is_favorite_removed_positive() -> None:
         channel="emby",
         item_type="MOV",
         item_path="/data/A.mkv",
+    )
+    assert plugin._is_favorite_removed(info) is True
+
+
+def test_is_favorite_removed_item_rate_event() -> None:
+    """Emby 用 item.rate 作为用户数据变更事件，IsFavorite=False 时判定为移除收藏。"""
+    plugin = _make_plugin()
+    info = SimpleNamespace(
+        event="item.rate",
+        save_reason=None,
+        item_favorite=None,
+        json_object={"Event": "item.rate", "Item": {"UserData": {"IsFavorite": False}}},
+        channel="emby",
+        user_name="sifangyu",
+        item_type="MOV",
+        item_path="/115/动画电影/小黄人与大怪兽 (2026)/小黄人与大怪兽 (2026) - 2160p.strm",
     )
     assert plugin._is_favorite_removed(info) is True
 
@@ -302,6 +319,17 @@ def test_resolve_scrape_target_dir_input(monkeypatch) -> None:
     target, target_type = plugin._resolve_scrape_target(r"/tv/国产剧/长风渡 (2023)", MediaType.TV)
     assert target_type == "dir"
     assert target == r"/tv/国产剧/长风渡 (2023)"
+
+
+def test_resolve_scrape_target_strm_to_dir(monkeypatch) -> None:
+    """strm 文件按重命名格式映射到媒体目录（而非当作目录处理）。"""
+    monkeypatch.setattr(settings, "MOVIE_RENAME_FORMAT", "{{title}}/{{title}} ({{year}})")
+    plugin = _make_plugin()
+    target, target_type = plugin._resolve_scrape_target(
+        r"/115/动画电影/小黄人与大怪兽 (2026)/小黄人与大怪兽 (2026) - 2160p.strm", MediaType.MOVIE
+    )
+    assert target_type == "dir"
+    assert target == r"/115/动画电影/小黄人与大怪兽 (2026)"
 
 
 def test_map_path() -> None:

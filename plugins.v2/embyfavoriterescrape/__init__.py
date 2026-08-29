@@ -17,7 +17,7 @@ from app.schemas.types import EventType, MediaType
 # 常见视频文件扩展名，用于区分 webhook 项是文件还是目录。
 _VIDEO_EXTENSIONS = {
     ".mp4", ".mkv", ".avi", ".ts", ".m2ts", ".rmvb", ".wmv", ".flv",
-    ".mov", ".m4v", ".mpg", ".mpeg", ".iso",
+    ".mov", ".m4v", ".mpg", ".mpeg", ".iso", ".strm",
 }
 
 # 指示“收藏”动作的 SaveReason 值，用于 Jellyfin 等媒体服务器的 UserDataSaved 事件。
@@ -38,7 +38,7 @@ class EmbyFavoriteRescrape(_PluginBase):
     # 插件图标
     plugin_icon = "scraper.png"
     # 插件版本
-    plugin_version = "1.3.0"
+    plugin_version = "1.3.1"
     # 插件作者
     plugin_author = "hucongcong22"
     # 作者主页
@@ -55,7 +55,7 @@ class EmbyFavoriteRescrape(_PluginBase):
     # 监听渠道，多个用逗号分隔，默认 Emby
     _channels = "emby"
     # 触发事件名，多个用逗号分隔；命中任一事件且收藏状态为已移除才触发刮削
-    _trigger_events = "UserDataSaved,userdata.saved,user_data_saved,item.favorite,itemFavorite,ItemFavorite,favorite"
+    _trigger_events = "UserDataSaved,userdata.saved,user_data_saved,item.favorite,itemFavorite,ItemFavorite,favorite,item.rate"
     # 限定媒体库用户名，多个用逗号分隔，留空表示不限制
     _user_names = ""
     # 路径排除关键词，多个用逗号分隔，命中则不刮削
@@ -524,7 +524,7 @@ class EmbyFavoriteRescrape(_PluginBase):
                                             "model": "path_mapping",
                                             "label": "路径映射",
                                             "rows": 4,
-                                            "placeholder": "每行一条，格式：媒体服务器路径:MoviePilot本地路径，例如：\n/data/video:/mnt/media/video",
+                                            "placeholder": "每行一条，格式：媒体服务器路径:MoviePilot本地路径，例如：\n/115:/media/115",
                                         },
                                     }
                                 ],
@@ -555,8 +555,10 @@ class EmbyFavoriteRescrape(_PluginBase):
                                             "type": "warning",
                                             "variant": "tonal",
                                             "text": "路径映射：当媒体服务器（如 Emby）与 MoviePilot 挂载的目录路径不一致时，"
-                                                    "按“源前缀:目标前缀”把 Webhook 返回的路径替换为 MoviePilot 本地路径后再刮削；"
-                                                    "留空则直接使用原始路径。刮削目录仍会按 MoviePilot 设定的电影/电视剧重命名格式计算。",
+                                                    "按“每行一条 源前缀:目标前缀”把 Webhook 返回的路径替换为 MoviePilot 本地路径后再刮削；"
+                                                    "留空则直接使用原始路径，最长源前缀优先，支持 # 注释。"
+                                                    "例如 Emby 返回 /115/...，而本机媒体库挂在 /media/115/，则填：/115:/media/115。"
+                                                    "刮削目录仍会按 MoviePilot 设定的电影/电视剧重命名格式计算。",
                                         },
                                     }
                                 ],
